@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Devil Escape</title>
+  <style>
+    body { margin:0; overflow:hidden; background:#111; }
+    canvas { display:block; margin:auto; background:linear-gradient(#260000,#111); }
+  </style>
+</head>
+<body>
+<canvas id="game" width="900" height="450"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let player = { x:80, y:330, w:45, h:55, dy:0, jump:false };
+let devil = { x:900, y:315, w:55, h:70, speed:6 };
+let fire = { x:1300, y:365, w:35, h:25, speed:7 };
+let coin = { x:700, y:250, r:13, speed:5 };
+let score = 0, coins = 0, gameOver = false;
+
+document.addEventListener("keydown", e => {
+  if((e.code === "Space" || e.code === "ArrowUp") && !player.jump){
+    player.dy = -14;
+    player.jump = true;
+  }
+  if(e.code === "Enter" && gameOver) location.reload();
+});
+
+function rectHit(a,b){
+  return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+}
+
+function update(){
+  if(gameOver) return;
+
+  player.dy += 0.7;
+  player.y += player.dy;
+
+  if(player.y >= 330){
+    player.y = 330;
+    player.dy = 0;
+    player.jump = false;
+  }
+
+  devil.x -= devil.speed;
+  fire.x -= fire.speed;
+  coin.x -= coin.speed;
+
+  if(devil.x < -80){
+    devil.x = 900 + Math.random()*400;
+    score++;
+    devil.speed += 0.2;
+  }
+
+  if(fire.x < -50){
+    fire.x = 1000 + Math.random()*600;
+  }
+
+  if(coin.x < -30){
+    coin.x = 900 + Math.random()*500;
+    coin.y = 220 + Math.random()*80;
+  }
+
+  let coinBox = {x:coin.x-coin.r, y:coin.y-coin.r, w:coin.r*2, h:coin.r*2};
+
+  if(rectHit(player, coinBox)){
+    coins++;
+    score += 2;
+    coin.x = 900 + Math.random()*500;
+  }
+
+  if(rectHit(player, devil) || rectHit(player, fire)){
+    gameOver = true;
+  }
+}
+
+function drawPlayer(){
+  ctx.fillStyle = "#2ecc71";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(player.x+10, player.y+10, 8, 8);
+  ctx.fillRect(player.x+28, player.y+10, 8, 8);
+
+  ctx.fillStyle = "#000";
+  ctx.fillRect(player.x+13, player.y+13, 3, 3);
+  ctx.fillRect(player.x+31, player.y+13, 3, 3);
+}
+
+function drawDevil(){
+  ctx.fillStyle = "#b30000";
+  ctx.fillRect(devil.x, devil.y, devil.w, devil.h);
+
+  ctx.fillStyle = "#ffcc00";
+  ctx.beginPath();
+  ctx.moveTo(devil.x+8, devil.y);
+  ctx.lineTo(devil.x+18, devil.y-25);
+  ctx.lineTo(devil.x+28, devil.y);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(devil.x+28, devil.y);
+  ctx.lineTo(devil.x+40, devil.y-25);
+  ctx.lineTo(devil.x+52, devil.y);
+  ctx.fill();
+
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(devil.x+12, devil.y+18, 10, 10);
+  ctx.fillRect(devil.x+34, devil.y+18, 10, 10);
+
+  ctx.fillStyle = "#000";
+  ctx.fillRect(devil.x+16, devil.y+22, 4, 4);
+  ctx.fillRect(devil.x+38, devil.y+22, 4, 4);
+}
+
+function drawFire(){
+  ctx.fillStyle = "orange";
+  ctx.beginPath();
+  ctx.moveTo(fire.x, fire.y+fire.h);
+  ctx.lineTo(fire.x+fire.w/2, fire.y-25);
+  ctx.lineTo(fire.x+fire.w, fire.y+fire.h);
+  ctx.fill();
+
+  ctx.fillStyle = "yellow";
+  ctx.beginPath();
+  ctx.moveTo(fire.x+8, fire.y+fire.h);
+  ctx.lineTo(fire.x+fire.w/2, fire.y-10);
+  ctx.lineTo(fire.x+fire.w-8, fire.y+fire.h);
+  ctx.fill();
+}
+
+function draw(){
+  ctx.clearRect(0,0,900,450);
+
+  ctx.fillStyle = "#3b0a0a";
+  ctx.fillRect(0,385,900,65);
+
+  ctx.fillStyle = "#ffaa00";
+  ctx.beginPath();
+  ctx.arc(coin.x, coin.y, coin.r, 0, Math.PI*2);
+  ctx.fill();
+
+  drawPlayer();
+  drawDevil();
+  drawFire();
+
+  ctx.fillStyle = "#fff";
+  ctx.font = "22px Arial";
+  ctx.fillText("Score: " + score, 20, 35);
+  ctx.fillText("Coins: " + coins, 20, 65);
+  ctx.fillText("Space / ↑ = Jump", 720, 35);
+
+  if(gameOver){
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(0,0,900,450);
+
+    ctx.fillStyle = "#ff3333";
+    ctx.font = "48px Arial";
+    ctx.fillText("GAME OVER", 300, 200);
+
+    ctx.fillStyle = "#fff";
+    ctx.font = "24px Arial";
+    ctx.fillText("Score: " + score + " | Coins: " + coins, 335, 245);
+    ctx.fillText("Press ENTER to Restart", 320, 290);
+  }
+}
+
+function loop(){
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
