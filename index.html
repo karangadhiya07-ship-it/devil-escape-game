@@ -1,117 +1,183 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Devil Escape</title>
+<title>Subway Devil Runner</title>
 <style>
 body{margin:0;background:#111;overflow:hidden;font-family:Arial}
-canvas{display:block;margin:auto;background:linear-gradient(#250000,#050505)}
-#jumpBtn{position:fixed;right:25px;bottom:25px;font-size:26px;padding:18px 28px;border:0;border-radius:20px;background:#ff3333;color:white}
+canvas{display:block;margin:auto;background:linear-gradient(#202040,#111)}
+.btn{position:fixed;bottom:25px;font-size:22px;padding:16px 22px;border:0;border-radius:18px;background:#ff3333;color:#fff}
+#leftBtn{left:25px}
+#jumpBtn{left:50%;transform:translateX(-50%)}
+#rightBtn{right:25px}
 </style>
 </head>
 <body>
-<canvas id="game" width="900" height="450"></canvas>
-<button id="jumpBtn">JUMP</button>
+<canvas id="game" width="900" height="500"></canvas>
+<button id="leftBtn" class="btn">LEFT</button>
+<button id="jumpBtn" class="btn">JUMP</button>
+<button id="rightBtn" class="btn">RIGHT</button>
 
 <script>
 const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
 
-let player={x:80,y:330,w:45,h:55,dy:0,jump:false};
-let devil={x:900,y:315,w:60,h:70,speed:5};
-let fire={x:1250,y:365,w:40,h:25,speed:6};
-let coin={x:650,y:250,r:13,speed:5};
+const lanes=[280,450,620];
+let lane=1;
+let player={x:lanes[lane],y:380,w:45,h:60,dy:0,jump:false};
+let obstacle={lane:Math.floor(Math.random()*3),y:-120,w:80,h:90,speed:5};
+let coin={lane:Math.floor(Math.random()*3),y:-300,r:16,speed:5};
 let score=0,coins=0,level=1,gameOver=false;
+let highScore=localStorage.getItem("highScore")||0;
 
-function jump(){
- if(!player.jump&&!gameOver){player.dy=-15;player.jump=true;}
- if(gameOver) location.reload();
-}
+function moveLeft(){if(lane>0&&!gameOver){lane--;player.x=lanes[lane];}}
+function moveRight(){if(lane<2&&!gameOver){lane++;player.x=lanes[lane];}}
+function jump(){if(!player.jump&&!gameOver){player.dy=-15;player.jump=true;} if(gameOver)location.reload();}
+
 document.addEventListener("keydown",e=>{
- if(e.code==="Space"||e.code==="ArrowUp") jump();
- if(e.code==="Enter"&&gameOver) location.reload();
+ if(e.code==="ArrowLeft")moveLeft();
+ if(e.code==="ArrowRight")moveRight();
+ if(e.code==="Space"||e.code==="ArrowUp")jump();
+ if(e.code==="Enter"&&gameOver)location.reload();
 });
-document.getElementById("jumpBtn").onclick=jump;
+
+leftBtn.onclick=moveLeft;
+rightBtn.onclick=moveRight;
+jumpBtn.onclick=jump;
 
 function hit(a,b){
  return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 }
 
-function setLevel(){
- level=Math.floor(score/5)+1;
- devil.speed=5+level*0.7;
- fire.speed=6+level*0.6;
- coin.speed=5+level*0.3;
-}
-
 function update(){
  if(gameOver)return;
- setLevel();
 
- player.dy+=0.75;
+ level=Math.floor(score/10)+1;
+ obstacle.speed=5+level*0.8;
+ coin.speed=5+level*0.6;
+
+ player.dy+=0.8;
  player.y+=player.dy;
- if(player.y>=330){player.y=330;player.dy=0;player.jump=false;}
+ if(player.y>=380){player.y=380;player.dy=0;player.jump=false;}
 
- devil.x-=devil.speed;
- fire.x-=fire.speed;
- coin.x-=coin.speed;
+ obstacle.y+=obstacle.speed;
+ coin.y+=coin.speed;
 
- if(devil.x<-80){devil.x=900+Math.random()*500;score++;}
- if(fire.x<-60){fire.x=1000+Math.random()*700;}
- if(coin.x<-40){coin.x=900+Math.random()*500;coin.y=220+Math.random()*80;}
+ if(obstacle.y>550){
+  obstacle.y=-100;
+  obstacle.lane=Math.floor(Math.random()*3);
+  score++;
+ }
 
- let coinBox={x:coin.x-coin.r,y:coin.y-coin.r,w:coin.r*2,h:coin.r*2};
- if(hit(player,coinBox)){coins++;score+=2;coin.x=950+Math.random()*500;}
+ if(coin.y>550){
+  coin.y=-250-Math.random()*300;
+  coin.lane=Math.floor(Math.random()*3);
+ }
 
- if(hit(player,devil)||hit(player,fire)) gameOver=true;
-}
+ let obsBox={x:lanes[obstacle.lane]-40,y:obstacle.y,w:80,h:90};
+ let coinBox={x:lanes[coin.lane]-16,y:coin.y-16,w:32,h:32};
 
-function drawPlayer(){
- ctx.fillStyle="#29d66b";ctx.fillRect(player.x,player.y,player.w,player.h);
- ctx.fillStyle="#111";ctx.fillRect(player.x+8,player.y-8,10,10);ctx.fillRect(player.x+28,player.y-8,10,10);
- ctx.fillStyle="#fff";ctx.fillRect(player.x+10,player.y+12,8,8);ctx.fillRect(player.x+28,player.y+12,8,8);
- ctx.fillStyle="#000";ctx.fillRect(player.x+13,player.y+15,3,3);ctx.fillRect(player.x+31,player.y+15,3,3);
-}
+ if(hit(player,coinBox)){
+  coins++;
+  score+=2;
+  coin.y=-250-Math.random()*300;
+  coin.lane=Math.floor(Math.random()*3);
+ }
 
-function drawDevil(){
- ctx.fillStyle="#b00000";ctx.fillRect(devil.x,devil.y,devil.w,devil.h);
- ctx.fillStyle="#ffcc00";
- ctx.beginPath();ctx.moveTo(devil.x+5,devil.y);ctx.lineTo(devil.x+18,devil.y-28);ctx.lineTo(devil.x+30,devil.y);ctx.fill();
- ctx.beginPath();ctx.moveTo(devil.x+30,devil.y);ctx.lineTo(devil.x+45,devil.y-28);ctx.lineTo(devil.x+58,devil.y);ctx.fill();
- ctx.fillStyle="#fff";ctx.fillRect(devil.x+12,devil.y+18,10,10);ctx.fillRect(devil.x+38,devil.y+18,10,10);
- ctx.fillStyle="#000";ctx.fillRect(devil.x+16,devil.y+22,4,4);ctx.fillRect(devil.x+42,devil.y+22,4,4);
-}
-
-function drawFire(){
- ctx.fillStyle="orange";
- ctx.beginPath();ctx.moveTo(fire.x,fire.y+fire.h);ctx.lineTo(fire.x+20,fire.y-28);ctx.lineTo(fire.x+40,fire.y+fire.h);ctx.fill();
- ctx.fillStyle="yellow";
- ctx.beginPath();ctx.moveTo(fire.x+8,fire.y+fire.h);ctx.lineTo(fire.x+20,fire.y-10);ctx.lineTo(fire.x+32,fire.y+fire.h);ctx.fill();
-}
-
-function draw(){
- ctx.clearRect(0,0,900,450);
- ctx.fillStyle="#3b0a0a";ctx.fillRect(0,385,900,65);
-
- ctx.fillStyle="#ffaa00";ctx.beginPath();ctx.arc(coin.x,coin.y,coin.r,0,Math.PI*2);ctx.fill();
-
- drawPlayer();drawDevil();drawFire();
-
- ctx.fillStyle="#fff";ctx.font="22px Arial";
- ctx.fillText("Score: "+score,20,35);
- ctx.fillText("Coins: "+coins,20,65);
- ctx.fillText("Level: "+level,20,95);
- ctx.fillText("Space / ↑ / Button = Jump",630,35);
-
- if(gameOver){
-  ctx.fillStyle="rgba(0,0,0,0.75)";ctx.fillRect(0,0,900,450);
-  ctx.fillStyle="#ff3333";ctx.font="50px Arial";ctx.fillText("GAME OVER",290,190);
-  ctx.fillStyle="#fff";ctx.font="24px Arial";
-  ctx.fillText("Score: "+score+" | Coins: "+coins+" | Level: "+level,275,240);
-  ctx.fillText("Press ENTER or JUMP to Restart",280,290);
+ if(hit(player,obsBox)){
+  gameOver=true;
+  if(score>highScore){
+    highScore=score;
+    localStorage.setItem("highScore",highScore);
+  }
  }
 }
 
-function loop(){update();draw();requestAnimationFrame(loop);}
+function drawRoad(){
+ ctx.fillStyle="#222";
+ ctx.beginPath();
+ ctx.moveTo(250,500);
+ ctx.lineTo(650,500);
+ ctx.lineTo(560,0);
+ ctx.lineTo(340,0);
+ ctx.closePath();
+ ctx.fill();
+
+ ctx.strokeStyle="#fff";
+ ctx.lineWidth=4;
+ ctx.setLineDash([25,25]);
+ ctx.beginPath();
+ ctx.moveTo(380,500);
+ ctx.lineTo(420,0);
+ ctx.stroke();
+ ctx.beginPath();
+ ctx.moveTo(520,500);
+ ctx.lineTo(480,0);
+ ctx.stroke();
+ ctx.setLineDash([]);
+}
+
+function drawPlayer(){
+ ctx.fillStyle="#00d66b";
+ ctx.fillRect(player.x-22,player.y,player.w,player.h);
+ ctx.fillStyle="#fff";
+ ctx.fillRect(player.x-12,player.y+15,8,8);
+ ctx.fillRect(player.x+6,player.y+15,8,8);
+ ctx.fillStyle="#000";
+ ctx.fillRect(player.x-10,player.y+18,3,3);
+ ctx.fillRect(player.x+8,player.y+18,3,3);
+}
+
+function drawObstacle(){
+ let x=lanes[obstacle.lane]-40;
+ ctx.fillStyle="#444";
+ ctx.fillRect(x,obstacle.y,80,90);
+ ctx.fillStyle="#ff3333";
+ ctx.fillRect(x+10,obstacle.y+15,60,20);
+ ctx.fillStyle="#999";
+ ctx.fillRect(x+12,obstacle.y+50,18,25);
+ ctx.fillRect(x+50,obstacle.y+50,18,25);
+}
+
+function drawCoin(){
+ ctx.fillStyle="#ffb000";
+ ctx.beginPath();
+ ctx.arc(lanes[coin.lane],coin.y,coin.r,0,Math.PI*2);
+ ctx.fill();
+}
+
+function draw(){
+ ctx.clearRect(0,0,900,500);
+ drawRoad();
+ drawCoin();
+ drawObstacle();
+ drawPlayer();
+
+ ctx.fillStyle="#fff";
+ ctx.font="22px Arial";
+ ctx.fillText("Score: "+score,20,35);
+ ctx.fillText("Coins: "+coins,20,65);
+ ctx.fillText("Level: "+level,20,95);
+ ctx.fillText("High Score: "+highScore,20,125);
+ ctx.fillText("← → Move | Space Jump",620,35);
+
+ if(gameOver){
+  ctx.fillStyle="rgba(0,0,0,0.75)";
+  ctx.fillRect(0,0,900,500);
+  ctx.fillStyle="#ff3333";
+  ctx.font="46px Arial";
+  ctx.fillText("GAME OVER",300,210);
+  ctx.fillStyle="#fff";
+  ctx.font="24px Arial";
+  ctx.fillText("Score: "+score+" | Coins: "+coins,305,260);
+  ctx.fillText("Press ENTER or JUMP to Restart",270,310);
+ }
+}
+
+function loop(){
+ update();
+ draw();
+ requestAnimationFrame(loop);
+}
 loop();
 </script>
 </body>
