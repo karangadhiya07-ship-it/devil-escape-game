@@ -1,124 +1,272 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Subway Devil Runner V3</title>
+<title>3D Subway Runner</title>
 <style>
-body{margin:0;background:#111;overflow:hidden;font-family:Arial}
-canvas{display:block;margin:auto;background:#090922}
-.btn{position:fixed;bottom:25px;font-size:22px;padding:16px 24px;border:0;border-radius:18px;background:#ff3333;color:white}
-#leftBtn{left:25px} #jumpBtn{left:50%;transform:translateX(-50%)} #rightBtn{right:25px}
+body{margin:0;overflow:hidden;background:#000;font-family:Arial}
+#ui{position:fixed;top:15px;left:15px;color:white;font-size:22px;z-index:5}
+.btn{position:fixed;bottom:25px;font-size:22px;padding:16px 24px;border:0;border-radius:18px;background:#ff3333;color:white;z-index:5}
+#left{left:25px} #jump{left:50%;transform:translateX(-50%)} #right{right:25px}
+#over{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);color:white;text-align:center;padding-top:180px;font-size:34px;z-index:9}
 </style>
 </head>
 <body>
-<canvas id="game" width="900" height="520"></canvas>
-<button id="leftBtn" class="btn">LEFT</button>
-<button id="jumpBtn" class="btn">JUMP</button>
-<button id="rightBtn" class="btn">RIGHT</button>
+<div id="ui">
+Score: <span id="score">0</span><br>
+Coins: <span id="coins">0</span><br>
+Lives: <span id="lives">❤️❤️❤️</span>
+</div>
 
+<div id="over">
+GAME OVER<br><br>
+Press ENTER or JUMP to restart
+</div>
+
+<button id="left" class="btn">LEFT</button>
+<button id="jump" class="btn">JUMP</button>
+<button id="right" class="btn">RIGHT</button>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
-const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
-const lanes=[300,450,600];
-let lane=1,score=0,coins=0,level=1,lives=3,distance=0,gameOver=false;
-let highScore=localStorage.getItem("highScore")||0;
-let player={x:lanes[lane],y:390,w:45,h:65,dy:0,jump:false};
-let train={lane:Math.floor(Math.random()*3),y:-160,w:95,h:125,speed:5};
-let coin={lane:Math.floor(Math.random()*3),y:-300,r:15,speed:5};
-let cloudX=900;
+let scene,camera,renderer;
+let player,playerGroup;
+let lane=0,targetX=0;
+let lanes=[-3,0,3];
+let velocityY=0,isJump=false;
+let trains=[],coinsArr=[],tracks=[];
+let speed=.35,score=0,coins=0,lives=3,gameOver=false;
 
-function left(){if(lane>0&&!gameOver){lane--;player.x=lanes[lane];}}
-function right(){if(lane<2&&!gameOver){lane++;player.x=lanes[lane];}}
-function jump(){if(!player.jump&&!gameOver){player.dy=-16;player.jump=true;} if(gameOver)location.reload();}
-document.onkeydown=e=>{if(e.code==="ArrowLeft")left(); if(e.code==="ArrowRight")right(); if(e.code==="Space"||e.code==="ArrowUp")jump(); if(e.code==="Enter"&&gameOver)location.reload();}
-leftBtn.onclick=left; rightBtn.onclick=right; jumpBtn.onclick=jump;
+init();
+animate();
 
-function hit(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;}
+function init(){
+ scene=new THREE.Scene();
+ scene.background=new THREE.Color(0x87ceeb);
+
+ camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.1,1000);
+ camera.position.set(0,5,10);
+ camera.lookAt(0,2,-10);
+
+ renderer=new THREE.WebGLRenderer({antialias:true});
+ renderer.setSize(innerWidth,innerHeight);
+ document.body.appendChild(renderer.domElement);
+
+ let light=new THREE.HemisphereLight(0xffffff,0x444444,2);
+ scene.add(light);
+
+ let sun=new THREE.DirectionalLight(0xffffff,1);
+ sun.position.set(5,10,5);
+ scene.add(sun);
+
+ createWorld();
+ createPlayer();
+
+ for(let i=0;i<8;i++) createTrain(-30-i*35);
+ for(let i=0;i<15;i++) createCoin(-15-i*15);
+
+ document.addEventListener("keydown",e=>{
+  if(e.code==="ArrowLeft")moveLeft();
+  if(e.code==="ArrowRight")moveRight();
+  if(e.code==="Space"||e.code==="ArrowUp")jumpPlayer();
+  if(e.code==="Enter"&&gameOver)location.reload();
+ });
+
+ left.onclick=moveLeft;
+ right.onclick=moveRight;
+ jump.onclick=jumpPlayer;
+
+ addEventListener("resize",()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+ });
+}
+
+function box(w,h,d,color){
+ let g=new THREE.BoxGeometry(w,h,d);
+ let m=new THREE.MeshStandardMaterial({color});
+ return new THREE.Mesh(g,m);
+}
+
+function createWorld(){
+ let ground=box(14,.2,800,0xf2a02d);
+ ground.position.set(0,-.1,-250);
+ scene.add(ground);
+
+ for(let x of [-4,0,4]){
+  let rail1=box(.12,.15,800,0x555555);
+  rail1.position.set(x-.45,.05,-250);
+  scene.add(rail1);
+
+  let rail2=box(.12,.15,800,0x555555);
+  rail2.position.set(x+.45,.05,-250);
+  scene.add(rail2);
+ }
+
+ for(let i=0;i<120;i++){
+  let t=box(12,.08,.35,0x8b5a2b);
+  t.position.set(0,.08,-i*5);
+  scene.add(t);
+ }
+
+ for(let i=0;i<40;i++){
+  let b=box(3,Math.random()*8+4,3,0x6b4b3e);
+  b.position.set(-9, b.geometry.parameters.height/2, -i*18);
+  scene.add(b);
+
+  let b2=box(3,Math.random()*8+4,3,0x6b4b3e);
+  b2.position.set(9, b2.geometry.parameters.height/2, -i*18);
+  scene.add(b2);
+ }
+
+ let sky=box(80,30,.5,0x69cfff);
+ sky.position.set(0,15,-180);
+ scene.add(sky);
+}
+
+function createPlayer(){
+ playerGroup=new THREE.Group();
+
+ let body=box(1,1.4,.6,0x0066ff);
+ body.position.y=1.2;
+ playerGroup.add(body);
+
+ let head=box(.8,.8,.8,0xffcc99);
+ head.position.y=2.3;
+ playerGroup.add(head);
+
+ let leg1=box(.3,.8,.3,0x111111);
+ leg1.position.set(-.25,.35,0);
+ playerGroup.add(leg1);
+
+ let leg2=box(.3,.8,.3,0x111111);
+ leg2.position.set(.25,.35,0);
+ playerGroup.add(leg2);
+
+ playerGroup.position.set(0,0,4);
+ scene.add(playerGroup);
+ player=playerGroup;
+}
+
+function createTrain(z){
+ let g=new THREE.Group();
+
+ let body=box(2.2,2.2,5,0xe60012);
+ body.position.y=1.2;
+ g.add(body);
+
+ let front=box(1.7,.7,.15,0x222222);
+ front.position.set(0,1.7,2.55);
+ g.add(front);
+
+ let light1=box(.35,.35,.1,0xffff00);
+ light1.position.set(-.55,.7,2.65);
+ g.add(light1);
+
+ let light2=box(.35,.35,.1,0xffff00);
+ light2.position.set(.55,.7,2.65);
+ g.add(light2);
+
+ g.position.set(lanes[Math.floor(Math.random()*3)],0,z);
+ scene.add(g);
+ trains.push(g);
+}
+
+function createCoin(z){
+ let geo=new THREE.TorusGeometry(.35,.12,12,30);
+ let mat=new THREE.MeshStandardMaterial({color:0xffd000});
+ let c=new THREE.Mesh(geo,mat);
+ c.position.set(lanes[Math.floor(Math.random()*3)],1.5,z);
+ c.rotation.x=Math.PI/2;
+ scene.add(c);
+ coinsArr.push(c);
+}
+
+function moveLeft(){
+ if(gameOver)return;
+ if(lane>-1){lane--;targetX=lanes[lane+1];}
+}
+
+function moveRight(){
+ if(gameOver)return;
+ if(lane<1){lane++;targetX=lanes[lane+1];}
+}
+
+function jumpPlayer(){
+ if(gameOver){location.reload();return;}
+ if(!isJump){
+  velocityY=.28;
+  isJump=true;
+ }
+}
+
+function hit(a,b,dist){
+ return Math.abs(a.position.x-b.position.x)<1.5 && Math.abs(a.position.z-b.position.z)<dist && a.position.y<1.2;
+}
 
 function update(){
  if(gameOver)return;
- level=Math.floor(score/12)+1;
- train.speed=5+level*.7; coin.speed=5+level*.5;
- distance+=1; cloudX-=0.6; if(cloudX<-200)cloudX=950;
 
- player.dy+=0.8; player.y+=player.dy;
- if(player.y>=390){player.y=390;player.dy=0;player.jump=false;}
+ score++;
+ speed+=0.00005;
 
- train.y+=train.speed; coin.y+=coin.speed;
- if(train.y>560){train.y=-180;train.lane=Math.floor(Math.random()*3);score++;}
- if(coin.y>560){coin.y=-250-Math.random()*350;coin.lane=Math.floor(Math.random()*3);}
+ player.position.x+=(targetX-player.position.x)*.15;
 
- let t={x:lanes[train.lane]-48,y:train.y,w:96,h:125};
- let c={x:lanes[coin.lane]-16,y:coin.y-16,w:32,h:32};
-
- if(hit(player,c)){coins++;score+=2;coin.y=-250-Math.random()*350;coin.lane=Math.floor(Math.random()*3);}
- if(hit(player,t)){
-  lives--;
-  train.y=-180; train.lane=Math.floor(Math.random()*3);
-  if(lives<=0){gameOver=true;if(score>highScore){highScore=score;localStorage.setItem("highScore",highScore);}}
+ velocityY-=.012;
+ player.position.y+=velocityY;
+ if(player.position.y<=0){
+  player.position.y=0;
+  velocityY=0;
+  isJump=false;
  }
-}
 
-function bg(){
- ctx.fillStyle="#07071d";ctx.fillRect(0,0,900,520);
- ctx.fillStyle="#f5e6a8";ctx.beginPath();ctx.arc(760,70,35,0,Math.PI*2);ctx.fill();
+ player.rotation.z=Math.sin(Date.now()/120)*.05;
 
- ctx.fillStyle="#151533";
- for(let i=0;i<8;i++){ctx.fillRect(i*120,260-(i%3)*35,70,260);}
- ctx.fillStyle="#ffd45a";
- for(let i=0;i<10;i++){ctx.fillRect((i*90)%900,310,10,10);}
-
- ctx.fillStyle="#fff";
- ctx.beginPath();ctx.arc(cloudX,95,18,0,Math.PI*2);ctx.arc(cloudX+25,90,24,0,Math.PI*2);ctx.arc(cloudX+55,96,18,0,Math.PI*2);ctx.fill();
-
- ctx.fillStyle="#242424";
- ctx.beginPath();ctx.moveTo(250,520);ctx.lineTo(650,520);ctx.lineTo(555,0);ctx.lineTo(345,0);ctx.closePath();ctx.fill();
-
- ctx.strokeStyle="#eee";ctx.lineWidth=4;ctx.setLineDash([30,30]);
- ctx.beginPath();ctx.moveTo(375,520);ctx.lineTo(415,0);ctx.stroke();
- ctx.beginPath();ctx.moveTo(525,520);ctx.lineTo(485,0);ctx.stroke();
- ctx.setLineDash([]);
-}
-
-function drawPlayer(){
- ctx.fillStyle="#ffcc99";ctx.fillRect(player.x-18,player.y-18,36,25);
- ctx.fillStyle="#0066ff";ctx.fillRect(player.x-22,player.y+5,44,42);
- ctx.fillStyle="#111";ctx.fillRect(player.x-20,player.y+48,16,22);ctx.fillRect(player.x+5,player.y+48,16,22);
- ctx.fillStyle="#fff";ctx.fillRect(player.x-11,player.y-8,7,7);ctx.fillRect(player.x+5,player.y-8,7,7);
- ctx.fillStyle="#000";ctx.fillRect(player.x-9,player.y-6,3,3);ctx.fillRect(player.x+7,player.y-6,3,3);
-}
-
-function drawTrain(){
- let x=lanes[train.lane]-48,y=train.y;
- ctx.fillStyle="#d71920";ctx.fillRect(x,y,96,125);
- ctx.fillStyle="#222";ctx.fillRect(x+12,y+15,72,35);
- ctx.fillStyle="#ffd400";ctx.fillRect(x+18,y+65,22,20);ctx.fillRect(x+56,y+65,22,20);
- ctx.fillStyle="#111";ctx.fillRect(x+10,y+105,25,18);ctx.fillRect(x+62,y+105,25,18);
-}
-
-function drawCoin(){
- ctx.fillStyle="#ffb000";ctx.beginPath();ctx.arc(lanes[coin.lane],coin.y,coin.r,0,Math.PI*2);ctx.fill();
- ctx.fillStyle="#fff1a8";ctx.beginPath();ctx.arc(lanes[coin.lane]-5,coin.y-5,5,0,Math.PI*2);ctx.fill();
-}
-
-function draw(){
- bg(); drawCoin(); drawTrain(); drawPlayer();
- ctx.fillStyle="white";ctx.font="22px Arial";
- ctx.fillText("Score: "+score,20,35);
- ctx.fillText("Coins: "+coins,20,65);
- ctx.fillText("Level: "+level,20,95);
- ctx.fillText("Lives: "+"❤️".repeat(lives),20,125);
- ctx.fillText("High Score: "+highScore,20,155);
- ctx.fillText("Distance: "+distance+"m",20,185);
-
- if(gameOver){
-  ctx.fillStyle="rgba(0,0,0,.75)";ctx.fillRect(0,0,900,520);
-  ctx.fillStyle="#ff3333";ctx.font="48px Arial";ctx.fillText("GAME OVER",300,220);
-  ctx.fillStyle="#fff";ctx.font="24px Arial";ctx.fillText("Score: "+score+" | Coins: "+coins,305,270);
-  ctx.fillText("Press ENTER or JUMP to Restart",270,320);
+ for(let tr of trains){
+  tr.position.z+=speed;
+  if(tr.position.z>10){
+   tr.position.z=-260-Math.random()*80;
+   tr.position.x=lanes[Math.floor(Math.random()*3)];
+  }
+  if(hit(player,tr,2.5)){
+   lives--;
+   document.getElementById("lives").innerText="❤️".repeat(lives);
+   tr.position.z=-230;
+   if(lives<=0){
+    gameOver=true;
+    document.getElementById("over").style.display="block";
+   }
+  }
  }
+
+ for(let c of coinsArr){
+  c.position.z+=speed;
+  c.rotation.z+=.15;
+  if(c.position.z>8){
+   c.position.z=-220-Math.random()*100;
+   c.position.x=lanes[Math.floor(Math.random()*3)];
+  }
+  if(Math.abs(player.position.x-c.position.x)<1 && Math.abs(player.position.z-c.position.z)<1.2 && player.position.y<2){
+   coins++;
+   c.position.z=-220-Math.random()*80;
+   c.position.x=lanes[Math.floor(Math.random()*3)];
+  }
+ }
+
+ camera.position.x=player.position.x*.35;
+ camera.position.y=5+player.position.y*.25;
+ camera.position.z=10;
+ camera.lookAt(player.position.x,1.5,-8);
+
+ document.getElementById("score").innerText=Math.floor(score/10);
+ document.getElementById("coins").innerText=coins;
 }
 
-function loop(){update();draw();requestAnimationFrame(loop);}
-loop();
+function animate(){
+ requestAnimationFrame(animate);
+ update();
+ renderer.render(scene,camera);
+}
 </script>
 </body>
 </html>
