@@ -1,183 +1,123 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Subway Devil Runner</title>
+<title>Subway Devil Runner V3</title>
 <style>
 body{margin:0;background:#111;overflow:hidden;font-family:Arial}
-canvas{display:block;margin:auto;background:linear-gradient(#202040,#111)}
-.btn{position:fixed;bottom:25px;font-size:22px;padding:16px 22px;border:0;border-radius:18px;background:#ff3333;color:#fff}
-#leftBtn{left:25px}
-#jumpBtn{left:50%;transform:translateX(-50%)}
-#rightBtn{right:25px}
+canvas{display:block;margin:auto;background:#090922}
+.btn{position:fixed;bottom:25px;font-size:22px;padding:16px 24px;border:0;border-radius:18px;background:#ff3333;color:white}
+#leftBtn{left:25px} #jumpBtn{left:50%;transform:translateX(-50%)} #rightBtn{right:25px}
 </style>
 </head>
 <body>
-<canvas id="game" width="900" height="500"></canvas>
+<canvas id="game" width="900" height="520"></canvas>
 <button id="leftBtn" class="btn">LEFT</button>
 <button id="jumpBtn" class="btn">JUMP</button>
 <button id="rightBtn" class="btn">RIGHT</button>
 
 <script>
-const canvas=document.getElementById("game");
-const ctx=canvas.getContext("2d");
-
-const lanes=[280,450,620];
-let lane=1;
-let player={x:lanes[lane],y:380,w:45,h:60,dy:0,jump:false};
-let obstacle={lane:Math.floor(Math.random()*3),y:-120,w:80,h:90,speed:5};
-let coin={lane:Math.floor(Math.random()*3),y:-300,r:16,speed:5};
-let score=0,coins=0,level=1,gameOver=false;
+const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
+const lanes=[300,450,600];
+let lane=1,score=0,coins=0,level=1,lives=3,distance=0,gameOver=false;
 let highScore=localStorage.getItem("highScore")||0;
+let player={x:lanes[lane],y:390,w:45,h:65,dy:0,jump:false};
+let train={lane:Math.floor(Math.random()*3),y:-160,w:95,h:125,speed:5};
+let coin={lane:Math.floor(Math.random()*3),y:-300,r:15,speed:5};
+let cloudX=900;
 
-function moveLeft(){if(lane>0&&!gameOver){lane--;player.x=lanes[lane];}}
-function moveRight(){if(lane<2&&!gameOver){lane++;player.x=lanes[lane];}}
-function jump(){if(!player.jump&&!gameOver){player.dy=-15;player.jump=true;} if(gameOver)location.reload();}
+function left(){if(lane>0&&!gameOver){lane--;player.x=lanes[lane];}}
+function right(){if(lane<2&&!gameOver){lane++;player.x=lanes[lane];}}
+function jump(){if(!player.jump&&!gameOver){player.dy=-16;player.jump=true;} if(gameOver)location.reload();}
+document.onkeydown=e=>{if(e.code==="ArrowLeft")left(); if(e.code==="ArrowRight")right(); if(e.code==="Space"||e.code==="ArrowUp")jump(); if(e.code==="Enter"&&gameOver)location.reload();}
+leftBtn.onclick=left; rightBtn.onclick=right; jumpBtn.onclick=jump;
 
-document.addEventListener("keydown",e=>{
- if(e.code==="ArrowLeft")moveLeft();
- if(e.code==="ArrowRight")moveRight();
- if(e.code==="Space"||e.code==="ArrowUp")jump();
- if(e.code==="Enter"&&gameOver)location.reload();
-});
-
-leftBtn.onclick=moveLeft;
-rightBtn.onclick=moveRight;
-jumpBtn.onclick=jump;
-
-function hit(a,b){
- return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
-}
+function hit(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;}
 
 function update(){
  if(gameOver)return;
+ level=Math.floor(score/12)+1;
+ train.speed=5+level*.7; coin.speed=5+level*.5;
+ distance+=1; cloudX-=0.6; if(cloudX<-200)cloudX=950;
 
- level=Math.floor(score/10)+1;
- obstacle.speed=5+level*0.8;
- coin.speed=5+level*0.6;
+ player.dy+=0.8; player.y+=player.dy;
+ if(player.y>=390){player.y=390;player.dy=0;player.jump=false;}
 
- player.dy+=0.8;
- player.y+=player.dy;
- if(player.y>=380){player.y=380;player.dy=0;player.jump=false;}
+ train.y+=train.speed; coin.y+=coin.speed;
+ if(train.y>560){train.y=-180;train.lane=Math.floor(Math.random()*3);score++;}
+ if(coin.y>560){coin.y=-250-Math.random()*350;coin.lane=Math.floor(Math.random()*3);}
 
- obstacle.y+=obstacle.speed;
- coin.y+=coin.speed;
+ let t={x:lanes[train.lane]-48,y:train.y,w:96,h:125};
+ let c={x:lanes[coin.lane]-16,y:coin.y-16,w:32,h:32};
 
- if(obstacle.y>550){
-  obstacle.y=-100;
-  obstacle.lane=Math.floor(Math.random()*3);
-  score++;
- }
-
- if(coin.y>550){
-  coin.y=-250-Math.random()*300;
-  coin.lane=Math.floor(Math.random()*3);
- }
-
- let obsBox={x:lanes[obstacle.lane]-40,y:obstacle.y,w:80,h:90};
- let coinBox={x:lanes[coin.lane]-16,y:coin.y-16,w:32,h:32};
-
- if(hit(player,coinBox)){
-  coins++;
-  score+=2;
-  coin.y=-250-Math.random()*300;
-  coin.lane=Math.floor(Math.random()*3);
- }
-
- if(hit(player,obsBox)){
-  gameOver=true;
-  if(score>highScore){
-    highScore=score;
-    localStorage.setItem("highScore",highScore);
-  }
+ if(hit(player,c)){coins++;score+=2;coin.y=-250-Math.random()*350;coin.lane=Math.floor(Math.random()*3);}
+ if(hit(player,t)){
+  lives--;
+  train.y=-180; train.lane=Math.floor(Math.random()*3);
+  if(lives<=0){gameOver=true;if(score>highScore){highScore=score;localStorage.setItem("highScore",highScore);}}
  }
 }
 
-function drawRoad(){
- ctx.fillStyle="#222";
- ctx.beginPath();
- ctx.moveTo(250,500);
- ctx.lineTo(650,500);
- ctx.lineTo(560,0);
- ctx.lineTo(340,0);
- ctx.closePath();
- ctx.fill();
+function bg(){
+ ctx.fillStyle="#07071d";ctx.fillRect(0,0,900,520);
+ ctx.fillStyle="#f5e6a8";ctx.beginPath();ctx.arc(760,70,35,0,Math.PI*2);ctx.fill();
 
- ctx.strokeStyle="#fff";
- ctx.lineWidth=4;
- ctx.setLineDash([25,25]);
- ctx.beginPath();
- ctx.moveTo(380,500);
- ctx.lineTo(420,0);
- ctx.stroke();
- ctx.beginPath();
- ctx.moveTo(520,500);
- ctx.lineTo(480,0);
- ctx.stroke();
+ ctx.fillStyle="#151533";
+ for(let i=0;i<8;i++){ctx.fillRect(i*120,260-(i%3)*35,70,260);}
+ ctx.fillStyle="#ffd45a";
+ for(let i=0;i<10;i++){ctx.fillRect((i*90)%900,310,10,10);}
+
+ ctx.fillStyle="#fff";
+ ctx.beginPath();ctx.arc(cloudX,95,18,0,Math.PI*2);ctx.arc(cloudX+25,90,24,0,Math.PI*2);ctx.arc(cloudX+55,96,18,0,Math.PI*2);ctx.fill();
+
+ ctx.fillStyle="#242424";
+ ctx.beginPath();ctx.moveTo(250,520);ctx.lineTo(650,520);ctx.lineTo(555,0);ctx.lineTo(345,0);ctx.closePath();ctx.fill();
+
+ ctx.strokeStyle="#eee";ctx.lineWidth=4;ctx.setLineDash([30,30]);
+ ctx.beginPath();ctx.moveTo(375,520);ctx.lineTo(415,0);ctx.stroke();
+ ctx.beginPath();ctx.moveTo(525,520);ctx.lineTo(485,0);ctx.stroke();
  ctx.setLineDash([]);
 }
 
 function drawPlayer(){
- ctx.fillStyle="#00d66b";
- ctx.fillRect(player.x-22,player.y,player.w,player.h);
- ctx.fillStyle="#fff";
- ctx.fillRect(player.x-12,player.y+15,8,8);
- ctx.fillRect(player.x+6,player.y+15,8,8);
- ctx.fillStyle="#000";
- ctx.fillRect(player.x-10,player.y+18,3,3);
- ctx.fillRect(player.x+8,player.y+18,3,3);
+ ctx.fillStyle="#ffcc99";ctx.fillRect(player.x-18,player.y-18,36,25);
+ ctx.fillStyle="#0066ff";ctx.fillRect(player.x-22,player.y+5,44,42);
+ ctx.fillStyle="#111";ctx.fillRect(player.x-20,player.y+48,16,22);ctx.fillRect(player.x+5,player.y+48,16,22);
+ ctx.fillStyle="#fff";ctx.fillRect(player.x-11,player.y-8,7,7);ctx.fillRect(player.x+5,player.y-8,7,7);
+ ctx.fillStyle="#000";ctx.fillRect(player.x-9,player.y-6,3,3);ctx.fillRect(player.x+7,player.y-6,3,3);
 }
 
-function drawObstacle(){
- let x=lanes[obstacle.lane]-40;
- ctx.fillStyle="#444";
- ctx.fillRect(x,obstacle.y,80,90);
- ctx.fillStyle="#ff3333";
- ctx.fillRect(x+10,obstacle.y+15,60,20);
- ctx.fillStyle="#999";
- ctx.fillRect(x+12,obstacle.y+50,18,25);
- ctx.fillRect(x+50,obstacle.y+50,18,25);
+function drawTrain(){
+ let x=lanes[train.lane]-48,y=train.y;
+ ctx.fillStyle="#d71920";ctx.fillRect(x,y,96,125);
+ ctx.fillStyle="#222";ctx.fillRect(x+12,y+15,72,35);
+ ctx.fillStyle="#ffd400";ctx.fillRect(x+18,y+65,22,20);ctx.fillRect(x+56,y+65,22,20);
+ ctx.fillStyle="#111";ctx.fillRect(x+10,y+105,25,18);ctx.fillRect(x+62,y+105,25,18);
 }
 
 function drawCoin(){
- ctx.fillStyle="#ffb000";
- ctx.beginPath();
- ctx.arc(lanes[coin.lane],coin.y,coin.r,0,Math.PI*2);
- ctx.fill();
+ ctx.fillStyle="#ffb000";ctx.beginPath();ctx.arc(lanes[coin.lane],coin.y,coin.r,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle="#fff1a8";ctx.beginPath();ctx.arc(lanes[coin.lane]-5,coin.y-5,5,0,Math.PI*2);ctx.fill();
 }
 
 function draw(){
- ctx.clearRect(0,0,900,500);
- drawRoad();
- drawCoin();
- drawObstacle();
- drawPlayer();
-
- ctx.fillStyle="#fff";
- ctx.font="22px Arial";
+ bg(); drawCoin(); drawTrain(); drawPlayer();
+ ctx.fillStyle="white";ctx.font="22px Arial";
  ctx.fillText("Score: "+score,20,35);
  ctx.fillText("Coins: "+coins,20,65);
  ctx.fillText("Level: "+level,20,95);
- ctx.fillText("High Score: "+highScore,20,125);
- ctx.fillText("← → Move | Space Jump",620,35);
+ ctx.fillText("Lives: "+"❤️".repeat(lives),20,125);
+ ctx.fillText("High Score: "+highScore,20,155);
+ ctx.fillText("Distance: "+distance+"m",20,185);
 
  if(gameOver){
-  ctx.fillStyle="rgba(0,0,0,0.75)";
-  ctx.fillRect(0,0,900,500);
-  ctx.fillStyle="#ff3333";
-  ctx.font="46px Arial";
-  ctx.fillText("GAME OVER",300,210);
-  ctx.fillStyle="#fff";
-  ctx.font="24px Arial";
-  ctx.fillText("Score: "+score+" | Coins: "+coins,305,260);
-  ctx.fillText("Press ENTER or JUMP to Restart",270,310);
+  ctx.fillStyle="rgba(0,0,0,.75)";ctx.fillRect(0,0,900,520);
+  ctx.fillStyle="#ff3333";ctx.font="48px Arial";ctx.fillText("GAME OVER",300,220);
+  ctx.fillStyle="#fff";ctx.font="24px Arial";ctx.fillText("Score: "+score+" | Coins: "+coins,305,270);
+  ctx.fillText("Press ENTER or JUMP to Restart",270,320);
  }
 }
 
-function loop(){
- update();
- draw();
- requestAnimationFrame(loop);
-}
+function loop(){update();draw();requestAnimationFrame(loop);}
 loop();
 </script>
 </body>
