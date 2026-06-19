@@ -53,3 +53,212 @@ GAME OVER<br>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
+let scene,camera,renderer,player;
+let lanes=[-3,0,3],lane=0,targetX=0;
+let velocityY=0,isJump=false,started=false,gameOver=false;
+let score=0,coins=0,lives=3,level=1,speed=.34;
+let trains=[],coinsArr=[],barricades=[],walls=[];
+
+let totalCoins=parseInt(localStorage.getItem("totalCoins")||"0");
+let selectedSkin=parseInt(localStorage.getItem("selectedSkin")||"0");
+let unlocked=JSON.parse(localStorage.getItem("unlockedSkins")||"[true,false,false,false]");
+
+let skins=[
+{name:"Blue Runner",cost:0,body:0x0066ff},
+{name:"Red Hoodie",cost:100,body:0xff2222},
+{name:"Indian Kurta",cost:250,body:0xffa500},
+{name:"Ninja Runner",cost:500,body:0x111111}
+];
+
+init(); animate();
+
+function startGame(){started=true;start.style.display="none";}
+function openShop(){started=false;renderShop();shop.style.display="block";}
+function closeShop(){shop.style.display="none";started=true;}
+
+function renderShop(){
+ shopItems.innerHTML="";
+ skins.forEach((s,i)=>{
+  let btn=unlocked[i]?(i===selectedSkin?"Selected":"Select"):"Unlock "+s.cost+" Coins";
+  shopItems.innerHTML+=`
+   <div class="skinCard">
+    <h3>${s.name}</h3>
+    <p>${unlocked[i]?"Unlocked":"Locked"}</p>
+    <button onclick="buySkin(${i})">${btn}</button>
+   </div>`;
+ });
+}
+
+function buySkin(i){
+ if(unlocked[i]){
+  selectedSkin=i;
+ }else if(totalCoins>=skins[i].cost){
+  totalCoins-=skins[i].cost;
+  unlocked[i]=true;
+  selectedSkin=i;
+ }
+ localStorage.setItem("totalCoins",totalCoins);
+ localStorage.setItem("selectedSkin",selectedSkin);
+ localStorage.setItem("unlockedSkins",JSON.stringify(unlocked));
+ updateSkin();
+ renderShop();
+ updateUI();
+}
+
+function init(){
+ scene=new THREE.Scene();
+ scene.background=new THREE.Color(0x87ceeb);
+ camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.1,1000);
+ renderer=new THREE.WebGLRenderer({antialias:true});
+ renderer.setSize(innerWidth,innerHeight);
+ document.body.appendChild(renderer.domElement);
+
+ scene.add(new THREE.HemisphereLight(0xffffff,0x555555,2));
+ let sun=new THREE.DirectionalLight(0xffffff,1.2);
+ sun.position.set(5,10,8);scene.add(sun);
+
+ world(); makePlayer();
+ for(let i=0;i<7;i++)makeTrain(-35-i*45);
+ for(let i=0;i<7;i++)makeBarricade(-55-i*65);
+ for(let i=0;i<22;i++)makeCoin(-20-i*14);
+
+ document.onkeydown=e=>{
+  if(e.code==="ArrowLeft")moveLeft();
+  if(e.code==="ArrowRight")moveRight();
+  if(e.code==="Space"||e.code==="ArrowUp")jumpPlayer();
+  if(e.code==="Enter"&&gameOver)location.reload();
+ };
+ left.onclick=moveLeft; right.onclick=moveRight; jump.onclick=jumpPlayer;
+ updateUI();
+}
+
+function box(w,h,d,color){
+ return new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color}));
+}
+
+function world(){
+ let ground=box(15,.2,900,0xf0a020);ground.position.set(0,-.1,-330);scene.add(ground);
+ for(let x of [-3,0,3]){
+  let r1=box(.12,.15,900,0x333333);r1.position.set(x-.55,.08,-330);scene.add(r1);
+  let r2=box(.12,.15,900,0x333333);r2.position.set(x+.55,.08,-330);scene.add(r2);
+ }
+ for(let i=0;i<160;i++){
+  let t=box(12,.08,.35,0x7a4a22);t.position.set(0,.12,-i*5);scene.add(t);
+ }
+ for(let i=0;i<40;i++){makeWall(-8,-i*18,i);makeWall(8,-i*18,i);}
+}
+
+function makeWall(x,z,i){
+ let g=new THREE.Group();
+ let wall=box(1.2,5,12,0x8b4b2b);wall.position.y=2.5;g.add(wall);
+ let colors=[0xff9933,0xffffff,0x138808,0xffdd00,0x00aaff];
+ for(let j=0;j<3;j++){
+  let art=box(.08,.8,1.8,colors[(i+j)%colors.length]);
+  art.position.set(x<0?.65:-.65,2+j*.9,-3+j*3);g.add(art);
+ }
+ g.position.set(x,0,z);scene.add(g);
+}
+
+function makePlayer(){
+ player=new THREE.Group();scene.add(player);player.position.set(0,0,4);updateSkin();
+}
+
+function updateSkin(){
+ while(player.children.length)player.remove(player.children[0]);
+ let s=skins[selectedSkin];
+ let body=box(1,1.5,.55,s.body);body.position.y=1.2;player.add(body);
+ let head=box(.8,.8,.8,0xffcc99);head.position.y=2.35;player.add(head);
+ let l1=box(.28,.75,.28,0x111111);l1.position.set(-.25,.35,0);player.add(l1);
+ let l2=box(.28,.75,.28,0x111111);l2.position.set(.25,.35,0);player.add(l2);
+ skin.innerText=s.name;
+}
+
+function makeTrain(z){
+ let g=new THREE.Group();
+ let body=box(2.3,2.4,10,0xe60012);body.position.y=1.3;g.add(body);
+ let glass=box(1.7,.65,.15,0x111111);glass.position.set(0,1.9,5.05);g.add(glass);
+ let l1=box(.35,.35,.12,0xffff00);l1.position.set(-.55,.75,5.15);g.add(l1);
+ let l2=box(.35,.35,.12,0xffff00);l2.position.set(.55,.75,5.15);g.add(l2);
+ g.position.set(lanes[Math.floor(Math.random()*3)],0,z);scene.add(g);trains.push(g);
+}
+
+function makeBarricade(z){
+ let g=new THREE.Group();
+ let base=box(2,.8,.35,0xff6600);base.position.y=.55;g.add(base);
+ let stripe=box(2.05,.18,.38,0xffffff);stripe.position.y=.55;g.add(stripe);
+ g.position.set(lanes[Math.floor(Math.random()*3)],0,z);scene.add(g);barricades.push(g);
+}
+
+function makeCoin(z){
+ let c=new THREE.Mesh(new THREE.TorusGeometry(.35,.12,12,30),new THREE.MeshStandardMaterial({color:0xffd000}));
+ c.position.set(lanes[Math.floor(Math.random()*3)],1.6,z);c.rotation.x=Math.PI/2;scene.add(c);coinsArr.push(c);
+}
+
+function moveLeft(){if(!started||gameOver)return;if(lane>-1){lane--;targetX=lanes[lane+1];}}
+function moveRight(){if(!started||gameOver)return;if(lane<1){lane++;targetX=lanes[lane+1];}}
+function jumpPlayer(){if(gameOver){location.reload();return}if(!started)return;if(!isJump){velocityY=.34;isJump=true;}}
+
+function hit(o,dist,yLimit){
+ return Math.abs(player.position.x-o.position.x)<1.55&&Math.abs(player.position.z-o.position.z)<dist&&player.position.y<yLimit;
+}
+
+function resetObj(o){o.position.z=-260-Math.random()*120;o.position.x=lanes[Math.floor(Math.random()*3)];}
+
+function damage(){
+ lives--;lives<=0?endGame():updateUI();
+}
+
+function endGame(){
+ gameOver=true;
+ totalCoins+=coins;
+ localStorage.setItem("totalCoins",totalCoins);
+ updateUI();
+ over.style.display="block";
+}
+
+function update(){
+ if(!started||gameOver)return;
+ score++;level=Math.floor(score/700)+1;speed=.34+level*.04;
+ player.position.x+=(targetX-player.position.x)*.18;
+ velocityY-=.014;player.position.y+=velocityY;
+ if(player.position.y<=0){player.position.y=0;velocityY=0;isJump=false;}
+
+ let run=Math.sin(Date.now()/90)*.25;
+ if(player.children[2])player.children[2].rotation.x=run;
+ if(player.children[3])player.children[3].rotation.x=-run;
+
+ for(let o of [...trains,...barricades]){
+  o.position.z+=speed;
+  if(o.position.z>11)resetObj(o);
+ }
+ for(let tr of trains){if(hit(tr,4.5,.9)){damage();resetObj(tr);}}
+ for(let b of barricades){if(hit(b,1.5,1.25)){damage();resetObj(b);}}
+
+ for(let c of coinsArr){
+  c.position.z+=speed;c.rotation.z+=.18;
+  if(c.position.z>9)resetObj(c);
+  if(Math.abs(player.position.x-c.position.x)<1&&Math.abs(player.position.z-c.position.z)<1.3&&player.position.y<2.2){
+   coins++;resetObj(c);
+  }
+ }
+
+ camera.position.x=player.position.x*.45;
+ camera.position.y=5.2+player.position.y*.25;
+ camera.position.z=10;
+ camera.lookAt(player.position.x,1.8,-12);
+ updateUI();
+}
+
+function updateUI(){
+ scoreEl=document.getElementById("score");
+ scoreEl.innerText=Math.floor(score/10);
+ document.getElementById("coins").innerText=coins;
+ document.getElementById("totalCoins").innerText=totalCoins;
+ document.getElementById("lives").innerText="❤️".repeat(lives);
+ document.getElementById("level").innerText=level;
+}
+
+function animate(){requestAnimationFrame(animate);update();renderer.render(scene,camera);}
+</script>
+</body>
+</html>
